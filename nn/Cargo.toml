@@ -7,6 +7,9 @@ edition = "2024"
 nn-utils = { path = "../nn-utils" }
 nn-macro = { path = "../nn-macro" }
 
+[features]
+unstable = []
+
 [[example]]
 name = "linear-regression"
 path = "./examples/linear_regression.rs"

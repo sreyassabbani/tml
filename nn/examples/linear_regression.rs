@@ -16,7 +16,7 @@ fn main() {
     println!("{}", type_of(&nt));
 
     // Example with a computation graph
-    let mut graph = graph! {
+    let graph = graph! {
         input -> Pow(2) -> Cos -> Scale((1.0 / 3.0)) -> Scale((1.0 / 3.0)) -> Scale(3.0) -> output
     };
 
@@ -27,7 +27,7 @@ fn main() {
     // TODO: expected API
 
     // Multi-input autodiff example
-    let mut multi = graph! {
+    let multi = graph! {
         inputs: [x, y]
         x -> Pow(2) -> @x_sq
         y -> Sin -> @y_sin
@@ -35,8 +35,9 @@ fn main() {
         output @result
     };
 
+    let mut multi_tape = multi.tape();
     let (value, grad) = multi
-        .compute(&[2.0, PI / 2.0])
+        .compute_with_tape(&[2.0, PI / 2.0], &mut multi_tape)
         .into_iter()
         .next()
         .expect("compute should return vec of 1 element here - sad");
@@ -45,7 +46,7 @@ fn main() {
     println!("multi grad: {:?}", grad);
 
     // Mixed chaining example
-    let mut mixed = graph! {
+    let mixed = graph! {
         inputs: [x, y]
         x -> Pow(2) -> @temp1
         y -> Cos -> @temp2
@@ -53,8 +54,9 @@ fn main() {
         output @res
     };
 
+    let mut mixed_tape = mixed.tape();
     let (mval, mgrad) = mixed
-        .compute(&[1.0, 0.0])
+        .compute_with_tape(&[1.0, 0.0], &mut mixed_tape)
         .into_iter()
         .next()
         .expect("compute shoudl return a vec of 1 element here - sad");

@@ -4,7 +4,7 @@ use std::any::type_name_of_val;
 
 fn main() {
     // Test single input graph (backward compatibility)
-    let mut single_graph = graph! {
+    let single_graph = graph! {
         input -> Sin -> Cos -> Pow(2) -> output
     };
 
@@ -17,7 +17,7 @@ fn main() {
     println!("{}", type_name_of_val(&single_graph));
 
     // Test multi-input graph with type-level arity
-    let mut multi_graph = graph! {
+    let multi_graph = graph! {
         inputs: [x, z]
         x -> Pow(2) -> @x_sq
         z -> Cos -> @z_cos
@@ -27,7 +27,8 @@ fn main() {
 
     println!("{}", type_name_of_val(&multi_graph));
 
-    let results = multi_graph.compute(&[2.0, 1.0]);
+    let mut tape = multi_graph.tape();
+    let results = multi_graph.compute_with_tape(&[2.0, 1.0], &mut tape);
     if let Some((result, derivative)) = results.first() {
         println!(
             "Multi input - f(2.0, 1.0) = {:.6}, f'(2.0, 1.0) = {:.6}",

@@ -86,7 +86,7 @@ where
             .at_mut(index)) = value;
     }
 
-    pub fn slice<T: Iterator>(range: T) {
+    pub fn slice<T: Iterator>(_range: T) {
         todo!()
     }
 }

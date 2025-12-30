@@ -10,8 +10,8 @@ mod tensor;
 
 pub mod conv;
 
-pub use tensor::Tensor;
 pub use layerable::{LayerKind, Layerable};
+pub use tensor::Tensor;
 
 // helper stuff for proc macro
 pub mod network;

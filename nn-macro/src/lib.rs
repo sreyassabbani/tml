@@ -1,8 +1,8 @@
+use nn_utils::layerable::{LayerKind, Layerable};
 use proc_macro::TokenStream;
 use proc_macro2::TokenStream as TokenStream2;
 use quote::quote;
 use syn::{Ident, LitInt, Token, parse_macro_input};
-use nn_utils::layerable::{LayerKind, Layerable};
 
 // Custom parsing for our network DSL
 mod parsing {
@@ -74,9 +74,7 @@ mod parsing {
                         let next_size = content.parse::<LitInt>()?.base10_parse()?;
                         layers.push(LayerSpec::new(
                             cur_size,
-                            LayerKind::Dense {
-                                output: next_size,
-                            },
+                            LayerKind::Dense { output: next_size },
                         ));
 
                         // resize network width
@@ -266,14 +264,14 @@ fn generate_network(def: parsing::NetworkDef) -> TokenStream2 {
 
                 pub fn forward(&self, input: &[f32; #input_size]) -> [f32; #output_size] {
                     // Copy input to first buffer
-                    // self.buffers.0 = *input;
+                    self.buffers.0 = *input;
 
                     // Run forward pass
-                    // #(#forward_calls)*
+                    #(#forward_calls)*
 
                     // Return final buffer
-                    // #final_buffer
-                    [0.0; #output_size]
+                    #final_buffer
+                    // [0.0; #output_size]
                 }
 
                 pub fn train<D: AsRef<[[f32; #input_size]]>, T: AsRef<[[f32; #output_size]]>>(&mut self, data: D, targets: T) {

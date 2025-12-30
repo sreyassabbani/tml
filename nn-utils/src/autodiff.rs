@@ -4,15 +4,13 @@ use std::collections::HashMap;
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub struct NodeId(usize);
 
-/// Multi-input computation graph with optimized performance
+/// Multi-input computation graph with optimized performance.
+/// Forward evaluation is pure; reuse an [`EvalTape`] to cache intermediates explicitly.
 #[derive(Debug)]
 pub struct MultiGraph {
     nodes: Vec<Node>,
     node_map: HashMap<String, NodeId>,
     next_id: usize,
-    /// Pre-allocated buffers for performance
-    primals: Vec<f64>,
-    tangents: Vec<f64>,
 }
 
 /// Node in the computation graph
@@ -32,6 +30,34 @@ pub enum Op {
     Pow(i32),
     Add,
     Mul,
+}
+
+/// Workspace that stores intermediate primals/tangents during evaluation.
+/// Reuse it across calls to avoid repeated allocations when performance matters.
+#[derive(Debug, Default)]
+pub struct EvalTape {
+    primals: Vec<f64>,
+    tangents: Vec<f64>,
+}
+
+impl EvalTape {
+    pub fn new() -> Self {
+        Self::default()
+    }
+
+    pub fn with_capacity(cap: usize) -> Self {
+        Self {
+            primals: Vec::with_capacity(cap),
+            tangents: Vec::with_capacity(cap),
+        }
+    }
+
+    fn reset(&mut self, needed_size: usize) {
+        self.primals.clear();
+        self.tangents.clear();
+        self.primals.resize(needed_size, 0.0);
+        self.tangents.resize(needed_size, 0.0);
+    }
 }
 
 impl Op {
@@ -69,8 +95,6 @@ impl MultiGraph {
             nodes: Vec::new(),
             node_map: HashMap::new(),
             next_id: 0,
-            primals: Vec::with_capacity(1024), // Pre-allocate reasonable size
-            tangents: Vec::with_capacity(1024),
         }
     }
 
@@ -100,20 +124,20 @@ impl MultiGraph {
         id
     }
 
-    pub fn compute(&mut self, inputs: &[f64]) -> Vec<(f64, f64)> {
-        self.primals.clear();
-        self.tangents.clear();
+    /// Allocate a tape sized for this graph. Reuse it to avoid allocations between runs.
+    pub fn tape(&self) -> EvalTape {
+        EvalTape::with_capacity(self.nodes.len())
+    }
 
-        // Ensure buffers are large enough
-        let needed_size = self.nodes.len();
-        if self.primals.capacity() < needed_size {
-            self.primals.reserve(needed_size);
-            self.tangents.reserve(needed_size);
-        }
+    /// Pure forward evaluation that allocates its own tape. Suitable for single-shot calls.
+    pub fn compute(&self, inputs: &[f64]) -> Vec<(f64, f64)> {
+        let mut tape = self.tape();
+        self.compute_with_tape(inputs, &mut tape)
+    }
 
-        // Initialize with zeros
-        self.primals.resize(needed_size, 0.0);
-        self.tangents.resize(needed_size, 0.0);
+    /// Forward evaluation that reuses the provided tape to cache intermediates.
+    pub fn compute_with_tape(&self, inputs: &[f64], tape: &mut EvalTape) -> Vec<(f64, f64)> {
+        tape.reset(self.nodes.len());
 
         // Create a mapping from input names to their indices in the inputs array
         let mut input_indices = HashMap::new();
@@ -130,17 +154,17 @@ impl MultiGraph {
             if let Node::Input(name) = node {
                 if let Some(&input_idx) = input_indices.get(name) {
                     if input_idx < inputs.len() {
-                        self.primals[i] = inputs[input_idx];
-                        self.tangents[i] = 1.0;
+                        tape.primals[i] = inputs[input_idx];
+                        tape.tangents[i] = 1.0;
                     } else {
                         // Handle case where input index is out of bounds
-                        self.primals[i] = 0.0;
-                        self.tangents[i] = 0.0;
+                        tape.primals[i] = 0.0;
+                        tape.tangents[i] = 0.0;
                     }
                 } else {
                     // Handle case where input name is not found
-                    self.primals[i] = 0.0;
-                    self.tangents[i] = 0.0;
+                    tape.primals[i] = 0.0;
+                    tape.tangents[i] = 0.0;
                 }
             }
         }
@@ -151,36 +175,36 @@ impl MultiGraph {
                 // Pre-allocate input_primals to avoid repeated allocations
                 let mut input_primals = Vec::with_capacity(inputs.len());
                 for &id in inputs {
-                    if id.0 < self.primals.len() {
-                        input_primals.push(self.primals[id.0]);
+                    if id.0 < tape.primals.len() {
+                        input_primals.push(tape.primals[id.0]);
                     } else {
                         input_primals.push(0.0);
                     }
                 }
 
-                self.primals[i] = op.compute(&input_primals);
+                tape.primals[i] = op.compute(&input_primals);
 
                 // Compute derivatives using chain rule
                 let mut total_derivative = 0.0;
                 for (j, &input_id) in inputs.iter().enumerate() {
-                    if input_id.0 < self.tangents.len() {
+                    if input_id.0 < tape.tangents.len() {
                         let partial = op.compute_derivative(&input_primals, j);
-                        total_derivative += self.tangents[input_id.0] * partial;
+                        total_derivative += tape.tangents[input_id.0] * partial;
                     }
                 }
-                self.tangents[i] = total_derivative;
+                tape.tangents[i] = total_derivative;
             }
         }
 
         // Third pass: handle outputs
         for (i, node) in self.nodes.iter().enumerate() {
             if let Node::Output(input_id) = node {
-                if input_id.0 < self.primals.len() {
-                    self.primals[i] = self.primals[input_id.0];
-                    self.tangents[i] = self.tangents[input_id.0];
+                if input_id.0 < tape.primals.len() {
+                    tape.primals[i] = tape.primals[input_id.0];
+                    tape.tangents[i] = tape.tangents[input_id.0];
                 } else {
-                    self.primals[i] = 0.0;
-                    self.tangents[i] = 0.0;
+                    tape.primals[i] = 0.0;
+                    tape.tangents[i] = 0.0;
                 }
             }
         }
@@ -191,7 +215,7 @@ impl MultiGraph {
             .enumerate()
             .filter_map(|(i, node)| {
                 if matches!(node, Node::Output(_)) {
-                    Some((self.primals[i], self.tangents[i]))
+                    Some((tape.primals[i], tape.tangents[i]))
                 } else {
                     None
                 }
@@ -204,37 +228,46 @@ impl MultiGraph {
 #[derive(Clone, Debug)]
 pub struct CompGraph {
     ops: Vec<Op>,
-    /// Pre-allocated buffers for performance
-    _buf_primals: Vec<f64>,
-    _buf_tangents: Vec<f64>,
 }
 
 impl CompGraph {
     pub fn new(ops: Vec<Op>) -> Self {
-        let cap = ops.len() + 1;
-        Self {
-            ops,
-            _buf_primals: Vec::with_capacity(cap),
-            _buf_tangents: Vec::with_capacity(cap),
-        }
+        Self { ops }
     }
 
-    pub fn compute(&mut self, input: f64) -> (f64, f64) {
-        self._buf_primals.clear();
-        self._buf_tangents.clear();
+    pub fn tape(&self) -> EvalTape {
+        EvalTape::with_capacity(self.ops.len() + 1)
+    }
 
-        self._buf_primals.push(input);
-        self.ops
-            .iter()
-            .fold((input, 1.0), |(primal_acc, tangent_chain), x| {
-                let primal = x.compute(&[primal_acc]);
-                let tangent = tangent_chain * x.compute_derivative(&[primal_acc], 0);
+    pub fn compute(&self, input: f64) -> (f64, f64) {
+        let mut tape = self.tape();
+        self.compute_with_tape(input, &mut tape)
+    }
 
-                self._buf_primals.push(primal);
-                self._buf_tangents.push(tangent);
+    pub fn compute_with_tape(&self, input: f64, tape: &mut EvalTape) -> (f64, f64) {
+        tape.reset(self.ops.len() + 1);
 
-                (primal, tangent)
-            })
+        tape.primals[0] = input;
+        tape.tangents[0] = 1.0;
+
+        for (i, op) in self.ops.iter().enumerate() {
+            let primal = op.compute(&[tape.primals[i]]);
+            let tangent = tape.tangents[i] * op.compute_derivative(&[tape.primals[i]], 0);
+
+            tape.primals[i + 1] = primal;
+            tape.tangents[i + 1] = tangent;
+        }
+
+        (
+            *tape
+                .primals
+                .last()
+                .expect("tape primals should have at least one element"),
+            *tape
+                .tangents
+                .last()
+                .expect("tape tangents should have at least one element"),
+        )
     }
 }
 
@@ -243,15 +276,15 @@ impl CompGraph {
 /// # Examples
 ///
 /// Single input graph:
-/// ```rust
-/// let graph = nn::graph! {
+/// ```rust,ignore
+/// let graph = graph! {
 ///     input -> Sin -> Cos -> output
 /// };
 /// ```
 ///
 /// Multi-input graph:
-/// ```rust
-/// let graph = nn::graph! {
+/// ```rust,ignore
+/// let graph = graph! {
 ///     inputs: [x, y]
 ///     x -> Pow(2) -> @x_sq
 ///     y -> Sin -> @y_sin
@@ -261,8 +294,8 @@ impl CompGraph {
 /// ```
 ///
 /// Mixed graph (operations without intermediate names):
-/// ```rust
-/// let graph = nn::graph! {
+/// ```rust,ignore
+/// let graph = graph! {
 ///     inputs: [x, y]
 ///     x -> Pow(2) -> @temp1
 ///     y -> Cos -> @temp2
@@ -273,10 +306,10 @@ impl CompGraph {
 ///
 /// # Performance Notes
 ///
-/// The implementation uses pre-allocated buffers to minimize memory allocations
-/// during computation. The graph structure is optimized for forward-mode automatic
-/// differentiation with efficient chain rule computation. Operations use type-level
-/// arity for compile-time safety.
+/// The default `compute` path allocates a fresh [`EvalTape`] each call for purity.
+/// When you need to reuse buffers, create a tape with `graph.tape()` and call
+/// `compute_with_tape` to keep allocations off the hot path. Operations use
+/// type-level arity for compile-time safety.
 #[macro_export]
 macro_rules! graph {
     // Single input graph (backward compatibility)

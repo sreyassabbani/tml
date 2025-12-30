@@ -9,15 +9,3 @@ unstable = []
 [dependencies]
 rand = "0.9.2"
 
-[[example]]
-name = "linear-regression"
-path = "./examples/linear_regression.rs"
-required-features = ["unstable"]
-
-[[example]]
-name = "quadratic-regression"
-path = "./examples/quadratic_regression.rs"
-
-[[example]]
-name = "multi-input"
-path = "./examples/multi_input.rs"
