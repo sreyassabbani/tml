@@ -2,17 +2,22 @@
 
 An **experimental** type-safe machine learning library. Implementing concepts from scratch is cool, so that's what I'm doing here.
 
-Currently, I'm working on building a somewhat fast[^1] Rust library from the ground up (yes, no external math libraries) with API design and "parse, don't validate" as a large focus.
-
-- Multi-layer perceptrons
-- Convolutional neural networks
-- Automatic differentiation
-
-And possibly a lot more in the future
-
 ### Philosophy
 
-A _lot_ of thought went into developer experience/API design, internal data flow, and performance. For the development philosophy, goals, and design decisions for this library, see [DESIGN](DESIGN.md).
+A _lot_ of thought went into developer experience/API design, internal data flow, and performance. I'm starting to develop a set of principles in my everyday work nowadays, with the "parent principle" resting on the library user (everything rests on the end user): <ins>make the default the correct choice</ins>.
+
+- make invalid states unrepresentable
+  - parse, don't validate
+- design for local reasoning
+- fast[^1]
+
+To be the best learning experience for me, I'm adding another principle:
+
+- no external math libraries
+
+This will limit the performance of the library, but this is a learning experience anyway. 
+
+For more on the development philosophy, goals, and design decisions for this library, see [DESIGN](DESIGN.md).
 
 ### Development
 
