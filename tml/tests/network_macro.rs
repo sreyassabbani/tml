@@ -1,7 +1,7 @@
 #![allow(incomplete_features)]
 #![feature(generic_const_exprs)]
 
-use tml::{network, Float, Sample, TrainConfig};
+use tml::{Float, Sample, TrainConfig, network};
 
 #[test]
 fn type_contains_expected_layers() {

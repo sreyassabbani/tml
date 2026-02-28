@@ -1,5 +1,5 @@
 use crate::network::Layer;
-use crate::{tensor::Tensor, Assert, Float, IsTrue};
+use crate::{Assert, Float, IsTrue, tensor::Tensor};
 use std::{array, marker::PhantomData};
 
 #[doc(hidden)]
@@ -12,7 +12,7 @@ pub const fn conv_out_dim(input: usize, pad: usize, kernel: usize, stride: usize
         return 0;
     }
     let numer = padded - kernel;
-    if numer % stride != 0 {
+    if !numer.is_multiple_of(stride) {
         return 0;
     }
     numer / stride + 1
@@ -88,15 +88,15 @@ pub struct Conv<
     bias_grads: Box<[Float; OC]>,
 }
 impl<
-        const IW: usize,
-        const IH: usize,
-        const IC: usize,
-        const FH: usize,
-        const FW: usize,
-        const OC: usize,
-        const S: usize,
-        const P: usize,
-    > Conv<IW, IH, IC, FH, FW, OC, S, P>
+    const IW: usize,
+    const IH: usize,
+    const IC: usize,
+    const FH: usize,
+    const FW: usize,
+    const OC: usize,
+    const S: usize,
+    const P: usize,
+> Conv<IW, IH, IC, FH, FW, OC, S, P>
 where
     Tensor<{ FH * FW * IC }, 3, shape_ty!(FH, FW, IC)>: Sized,
     [(); IC * IH * IW]:,
@@ -262,15 +262,15 @@ where
 }
 
 impl<
-        const IW: usize,
-        const IH: usize,
-        const IC: usize,
-        const FH: usize,
-        const FW: usize,
-        const OC: usize,
-        const S: usize,
-        const P: usize,
-    > Layer<{ IC * IH * IW }, { OC * conv_out_dim(IH, P, FH, S) * conv_out_dim(IW, P, FW, S) }>
+    const IW: usize,
+    const IH: usize,
+    const IC: usize,
+    const FH: usize,
+    const FW: usize,
+    const OC: usize,
+    const S: usize,
+    const P: usize,
+> Layer<{ IC * IH * IW }, { OC * conv_out_dim(IH, P, FH, S) * conv_out_dim(IW, P, FW, S) }>
     for Conv<IW, IH, IC, FH, FW, OC, S, P>
 where
     Tensor<{ FH * FW * IC }, 3, shape_ty!(FH, FW, IC)>: Sized,
@@ -311,15 +311,15 @@ pub trait ConvIO {
 }
 
 impl<
-        const IW: usize,
-        const IH: usize,
-        const IC: usize,
-        const FH: usize,
-        const FW: usize,
-        const OC: usize,
-        const S: usize,
-        const P: usize,
-    > ConvIO for Conv<IW, IH, IC, FH, FW, OC, S, P>
+    const IW: usize,
+    const IH: usize,
+    const IC: usize,
+    const FH: usize,
+    const FW: usize,
+    const OC: usize,
+    const S: usize,
+    const P: usize,
+> ConvIO for Conv<IW, IH, IC, FH, FW, OC, S, P>
 where
     Tensor<{ IC * IH * IW }, 3, shape_ty!(IC, IH, IW)>: Sized,
     Tensor<{ FH * FW * IC }, 3, shape_ty!(FH, FW, IC)>: Sized,
@@ -361,15 +361,15 @@ pub trait ConvOps: ConvIO {
 }
 
 impl<
-        const IW: usize,
-        const IH: usize,
-        const IC: usize,
-        const FH: usize,
-        const FW: usize,
-        const OC: usize,
-        const S: usize,
-        const P: usize,
-    > ConvOps for Conv<IW, IH, IC, FH, FW, OC, S, P>
+    const IW: usize,
+    const IH: usize,
+    const IC: usize,
+    const FH: usize,
+    const FW: usize,
+    const OC: usize,
+    const S: usize,
+    const P: usize,
+> ConvOps for Conv<IW, IH, IC, FH, FW, OC, S, P>
 where
     Tensor<{ FH * FW * IC }, 3, shape_ty!(FH, FW, IC)>: Sized,
     [(); FH * FW * IC]:,
@@ -394,8 +394,8 @@ where
         Conv::<IW, IH, IC, FH, FW, OC, S, P>::forward_flat(self, input, output);
     }
 
-    fn input_from_fn<F: FnMut(usize) -> Float>(mut f: F) -> Self::InputArray {
-        array::from_fn(|i| f(i))
+    fn input_from_fn<F: FnMut(usize) -> Float>(f: F) -> Self::InputArray {
+        array::from_fn(f)
     }
 
     fn output_zeroed() -> Self::OutputArray {

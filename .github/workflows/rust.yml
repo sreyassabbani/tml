@@ -2,21 +2,27 @@ name: Rust
 
 on:
   workflow_dispatch:
+  push:
+  pull_request:
 
 env:
   CARGO_TERM_COLOR: always
 
 jobs:
-  build:
+  checks:
     runs-on: ubuntu-latest
 
     steps:
       - uses: actions/checkout@v4
-      - name: Build
-        run: cargo build --verbose
+      - name: Install nightly toolchain
+        uses: dtolnay/rust-toolchain@nightly
+        with:
+          components: rustfmt, clippy
+      - name: Cache dependencies
+        uses: Swatinem/rust-cache@v2
       - name: Run tests
-        run: cargo test --verbose
+        run: cargo test --all-targets --all-features --verbose
       - name: Run clippy
-        run: cargo clippy -- -D warnings
+        run: cargo clippy --all-targets --all-features -- -D warnings
       - name: Run fmt check
-        run: cargo fmt -- --check
+        run: cargo fmt --all -- --check

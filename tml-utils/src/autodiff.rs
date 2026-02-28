@@ -315,8 +315,8 @@ impl MultiGraph {
 
                     // Compute derivatives using chain rule for each input dimension
                     let partials = &mut tape.scratch_partials[..arity];
-                    for j in 0..arity {
-                        partials[j] = op.compute_derivative(input_primals, j);
+                    for (j, partial) in partials.iter_mut().enumerate() {
+                        *partial = op.compute_derivative(input_primals, j);
                     }
 
                     let input_count = tape.input_count;
@@ -398,7 +398,7 @@ impl MultiGraph {
                     .input_names
                     .iter()
                     .cloned()
-                    .zip(grads.into_iter())
+                    .zip(grads)
                     .collect::<Vec<_>>();
                 (value, named)
             })
@@ -496,8 +496,8 @@ impl MultiGraph {
                         }
 
                         let partials = &mut tape.scratch_partials[..arity];
-                        for j in 0..arity {
-                            partials[j] = op.compute_derivative(input_primals, j);
+                        for (j, partial) in partials.iter_mut().enumerate() {
+                            *partial = op.compute_derivative(input_primals, j);
                         }
 
                         let adj = tape.adjoints[i];
@@ -559,7 +559,7 @@ impl MultiGraph {
                     .input_names
                     .iter()
                     .cloned()
-                    .zip(grads.into_iter())
+                    .zip(grads)
                     .collect::<Vec<_>>();
                 (value, named)
             })
@@ -589,7 +589,7 @@ impl MultiGraph {
                     .input_names
                     .iter()
                     .cloned()
-                    .zip(grads.into_iter())
+                    .zip(grads)
                     .collect::<Vec<_>>();
                 (value, named)
             })

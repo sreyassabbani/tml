@@ -1,7 +1,7 @@
 use proc_macro::TokenStream;
 use proc_macro2::TokenStream as TokenStream2;
 use quote::{format_ident, quote};
-use syn::{parse_macro_input, Expr, Ident, Token};
+use syn::{Expr, Ident, Token, parse_macro_input};
 
 // Custom parsing for our network DSL
 mod parsing {
