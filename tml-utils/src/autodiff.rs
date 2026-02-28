@@ -705,6 +705,25 @@ impl Gradients {
     }
 }
 
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum TapeError {
+    InputLengthMismatch { expected: usize, got: usize },
+    UnknownInput(String),
+}
+
+impl std::fmt::Display for TapeError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::InputLengthMismatch { expected, got } => {
+                write!(f, "expected {expected} inputs, got {got}")
+            }
+            Self::UnknownInput(name) => write!(f, "unknown input name: {name}"),
+        }
+    }
+}
+
+impl std::error::Error for TapeError {}
+
 /// Rust-like autodiff tape with operator overloading.
 #[derive(Debug, Clone)]
 pub struct Tape {
@@ -759,26 +778,35 @@ impl Tape {
     }
 
     pub fn set_inputs(&mut self, values: &[Float]) {
+        self.try_set_inputs(values)
+            .expect("input length mismatch for Tape::set_inputs");
+    }
+
+    pub fn try_set_inputs(&mut self, values: &[Float]) -> Result<(), TapeError> {
         let mut inner = self.inner.borrow_mut();
-        assert_eq!(
-            values.len(),
-            inner.values.len(),
-            "expected {} inputs, got {}",
-            inner.values.len(),
-            values.len()
-        );
+        let expected = inner.values.len();
+        if values.len() != expected {
+            return Err(TapeError::InputLengthMismatch {
+                expected,
+                got: values.len(),
+            });
+        }
         inner.values.copy_from_slice(values);
+        Ok(())
     }
 
     pub fn set(&mut self, name: &str, value: Float) {
+        self.try_set(name, value)
+            .expect("unknown input name for Tape::set");
+    }
+
+    pub fn try_set(&mut self, name: &str, value: Float) -> Result<(), TapeError> {
         let mut inner = self.inner.borrow_mut();
-        let idx = inner
-            .graph
-            .input_names
-            .iter()
-            .position(|n| n == name)
-            .expect("unknown input name");
+        let Some(idx) = inner.graph.input_names.iter().position(|n| n == name) else {
+            return Err(TapeError::UnknownInput(name.to_string()));
+        };
         inner.values[idx] = value;
+        Ok(())
     }
 
     pub fn input_names(&self) -> Vec<String> {
@@ -1112,4 +1140,89 @@ macro_rules! graph {
     (@build_multi $graph:ident, output) => {
         $graph
     };
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn approx_eq(a: Float, b: Float, eps: Float) {
+        let diff = (a - b).abs();
+        assert!(diff <= eps, "expected {a} ~= {b} (diff={diff}, eps={eps})");
+    }
+
+    #[test]
+    fn reverse_matches_forward_and_finite_difference() {
+        let mut g = MultiGraph::new();
+        let x = g.input("x".to_string());
+        let z = g.input("z".to_string());
+        let x_sq = g.operation(Op::Pow(2), [x]);
+        let z_cos = g.operation(Op::Cos, [z]);
+        let sum = g.operation(Op::Add, [x_sq, z_cos]);
+        let out = g.operation(Op::Sin, [sum]);
+        g.output(out);
+
+        let base = [1.3, -0.7];
+        let (fwd_val, fwd_grad) = g.compute_single(&base);
+        let (rev_val, rev_grad) = g.compute_reverse_single(&base);
+
+        approx_eq(fwd_val, rev_val, 1e-12);
+        approx_eq(fwd_grad[0], rev_grad[0], 1e-10);
+        approx_eq(fwd_grad[1], rev_grad[1], 1e-10);
+
+        let eps = 1e-7;
+        for i in 0..base.len() {
+            let mut plus = base;
+            let mut minus = base;
+            plus[i] += eps;
+            minus[i] -= eps;
+            let f_plus = g.compute_single(&plus).0;
+            let f_minus = g.compute_single(&minus).0;
+            let numeric = (f_plus - f_minus) / (2.0 * eps);
+            approx_eq(rev_grad[i], numeric, 1e-6);
+        }
+    }
+
+    #[test]
+    fn output_rejects_foreign_node_id() {
+        let mut g1 = MultiGraph::new();
+        let foreign = g1.input("x".to_string());
+
+        let mut g2 = MultiGraph::new();
+        let _ = g2.input("y".to_string());
+        let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+            g2.output(foreign);
+        }));
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn tape_try_set_variants() {
+        let mut tape = Tape::new();
+        let x = tape.input("x", 1.0);
+        let y = tape.input("y", 2.0);
+        let out = x + y;
+
+        tape.try_set_inputs(&[3.0, 4.0])
+            .expect("valid input update");
+        let grads = tape.gradients(&out);
+        approx_eq(grads.value, 7.0, 1e-12);
+
+        let err = tape
+            .try_set_inputs(&[1.0])
+            .expect_err("length mismatch should fail");
+        assert!(matches!(
+            err,
+            TapeError::InputLengthMismatch {
+                expected: 2,
+                got: 1
+            }
+        ));
+
+        tape.try_set("x", 5.0).expect("known input should be set");
+        let err = tape
+            .try_set("missing", 0.0)
+            .expect_err("unknown input should fail");
+        assert!(matches!(err, TapeError::UnknownInput(_)));
+    }
 }

@@ -501,3 +501,39 @@ macro_rules! tensor {
         }
     };
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    type T3 = Tensor<24, 3, shape_ty!(2, 3, 4)>;
+
+    #[test]
+    fn indexing_views_and_owned_get_match_layout() {
+        let mut t = T3::new();
+        let mut value = 0.0;
+        for i in 0..2 {
+            for j in 0..3 {
+                for k in 0..4 {
+                    t.set([i, j, k], value);
+                    value += 1.0;
+                }
+            }
+        }
+
+        assert_eq!(*t.at([1, 2, 3]), 23.0);
+
+        let row = t.get_view(1);
+        assert_eq!(*row.at([2, 3]), 23.0);
+
+        let owned = t.get(1);
+        assert_eq!(*owned.at([2, 3]), 23.0);
+    }
+
+    #[test]
+    #[should_panic(expected = "index out of bounds")]
+    fn get_view_panics_on_oob_index() {
+        let t = T3::new();
+        let _ = t.get_view(2);
+    }
+}
