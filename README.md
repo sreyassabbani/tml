@@ -28,3 +28,37 @@ Notice that in order to run this, I have `rust-toolchain.toml` set to `toolchain
 
 
 [^1]: yes. and also we don't talk about Rust compile times
+
+## Quickstart (current API)
+
+Nightly-only (until `generic_const_exprs` stabilizes). In your crate root:
+```rs
+#![feature(generic_const_exprs)]
+#![allow(incomplete_features)]
+```
+
+Network DSL (vector or image inputs, with explicit `flatten` before dense layers):
+```rs
+use tml::network;
+
+let mut net = network! {
+  input(3, 32, 32) -> conv(8, 3, 1, 1) -> relu -> flatten -> dense(10) -> output
+};
+
+let logits = net.inference(&[0.0; 3 * 32 * 32]);
+```
+
+Rust-like autodiff with a tape:
+```rs
+use tml::Tape;
+
+let mut tape = Tape::new();
+let x = tape.input("x", 2.0);
+let y = tape.input("y", 1.0);
+let z = (x * x + y.sin()).cos();
+let grads = tape.gradients(&z);
+
+println!("value = {}", grads.value);
+println!("dx = {:?}", grads.get("x"));
+println!("dy = {:?}", grads.get("y"));
+```

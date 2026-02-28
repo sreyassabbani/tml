@@ -1,11 +1,14 @@
 [package]
-name = "nn"
+name = "tml"
 version = "0.1.0"
 edition = "2024"
 
 [dependencies]
-nn-utils = { path = "../nn-utils" }
-nn-macro = { path = "../nn-macro" }
+tml-utils = { path = "../tml-utils" }
+tml-macro = { path = "../tml-macro" }
+
+[dev-dependencies]
+criterion = "0.5"
 
 [features]
 unstable = []
@@ -22,3 +25,15 @@ path = "./examples/quadratic_regression.rs"
 [[example]]
 name = "multi-input"
 path = "./examples/multi_input.rs"
+
+[[example]]
+name = "conv"
+path = "./examples/conv.rs"
+
+[[example]]
+name = "conv_op"
+path = "./examples/conv_op.rs"
+
+[[bench]]
+name = "conv"
+harness = false

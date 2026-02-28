@@ -1,4 +1,4 @@
-use nn::graph;
+use tml::{Tape, graph};
 
 use std::any::type_name_of_val;
 
@@ -28,13 +28,21 @@ fn main() {
     println!("{}", type_name_of_val(&multi_graph));
 
     let mut tape = multi_graph.tape();
-    let results = multi_graph.compute_with_tape(&[2.0, 1.0], &mut tape);
-    if let Some((result, derivative)) = results.first() {
-        println!(
-            "Multi input - f(2.0, 1.0) = {:.6}, f'(2.0, 1.0) = {:.6}",
-            result, derivative
-        );
-    }
+    let (result, grads) = multi_graph.compute_single_with_tape(&[2.0, 1.0], &mut tape);
+    println!(
+        "Multi input - f(2.0, 1.0) = {:.6}, grad = {:?}",
+        result, grads
+    );
+
+    let mut tape = Tape::new();
+    let x = tape.input("x", 2.0);
+    let z = tape.input("z", 1.0);
+    let res = (x.powi(2) + z.cos()).sin();
+    let grads = tape.gradients(&res);
+    println!(
+        "Tape input - f(2.0, 1.0) = {:.6}, grads = {:?}",
+        grads.value, grads.grads
+    );
 
     // // Test mixed graph with type-level arity
     // let mut mixed_graph = graph! {

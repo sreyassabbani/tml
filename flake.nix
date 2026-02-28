@@ -1,6 +1,6 @@
 {
   inputs = {
-    nixpkgs.url = "https://flakehub.com/f/NixOS/nixpkgs/0.tar.gz";
+    nixpkgs.url = "https://flakehub.com/f/DeterminateSystems/nixpkgs-weekly/0.tar.gz";
     flake-utils.url = "github:numtide/flake-utils";
 
     fenix = {
@@ -41,12 +41,14 @@
       in
       {
         devShells.default = pkgs.mkShell {
-          packages = [
+          packages = with pkgs; [
             rust
             ra
             llvm.lldb
-            pkgs.gemini-cli
-            pkgs.bacon
+            gemini-cli
+            bacon
+            python312
+            uv
           ];
 
           shellHook = ''

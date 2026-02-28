@@ -1,32 +1,44 @@
-# Write the benchmarking functions here.
-# See "Writing benchmarks" in the asv docs for more information.
+import torch
 
 
-class TimeSuite:
-    """
-    An example benchmark that times the performance of various kinds
-    of iterating over dictionaries in Python.
-    """
-
-    def setup(self):
-        self.d = {}
-        for x in range(500):
-            self.d[x] = None
-
-    def time_keys(self):
-        for key in self.d.keys():
-            pass
-
-    def time_values(self):
-        for value in self.d.values():
-            pass
-
-    def time_range(self):
-        d = self.d
-        for key in range(500):
-            d[key]
+_CASES = [
+    ("tiny", 1, 4, 8, 8, 3, 1, 1),
+    ("small", 3, 8, 32, 32, 3, 1, 1),
+    ("medium", 3, 16, 64, 64, 5, 1, 2),
+]
 
 
-class MemSuite:
-    def mem_list(self):
-        return [0] * 256
+class TimeTorchConv2d:
+    params = _CASES
+    param_names = ["case"]
+
+    def setup(self, case):
+        _, ic, oc, h, w, k, stride, pad = case
+        torch.set_num_threads(1)
+        torch.set_num_interop_threads(1)
+        torch.set_grad_enabled(False)
+        torch.manual_seed(0)
+
+        self.conv = torch.nn.Conv2d(
+            ic,
+            oc,
+            k,
+            stride=stride,
+            padding=pad,
+            bias=True,
+            dtype=torch.float64,
+            device="cpu",
+        )
+        self.conv.eval()
+        with torch.no_grad():
+            self.conv.bias.zero_()
+        self.x = torch.randn((1, ic, h, w), dtype=torch.float64, device="cpu")
+
+        # Warm up once to initialize kernels.
+        self.conv(self.x)
+
+    def teardown(self, case):
+        torch.set_grad_enabled(True)
+
+    def time_forward(self, case):
+        self.conv(self.x)

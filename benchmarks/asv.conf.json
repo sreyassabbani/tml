@@ -1,6 +1,6 @@
 {
     "version": 1,
-    "project": "nn-python-bench",
+    "project": "tml-python-bench",
     "repo": ".",
     "environment_type": "virtualenv",
     "env_dir": ".asv/env",
